@@ -8,8 +8,12 @@ class BluetoothComms {
 public:
   BluetoothComms(int baudrate); 
   int println(String data); 
+  int print(float data); 
+  int print(char* data); 
   String readString(void); 
   String readLine(void);
+  char read(void); 
+  int available(void);
 
 private: 
   SoftwareSerial * BluetoothSerial; 
