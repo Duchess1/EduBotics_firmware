@@ -12,14 +12,14 @@
 
 #include "MPU6050_6Axis_MotionApps20.h"
 //#include "MPU6050.h" // not necessary if using MotionApps include file
-volatile bool mpuInterrupt_;    // indicates whether MPU interrupt pin has gone high
+static volatile bool mpuInterrupt_;    // indicates whether MPU interrupt pin has gone high
 
 class EduBoticsMPU6050 {
 public:
 	EduBoticsMPU6050(); 
 	int initialise(); 
 	int update(); 
-	int getYawPitchRoll(float &yaw, float &pitch, float &roll);
+	int getYawPitchRoll(double *yaw, double *pitch, double *roll);
 	int getQuaternion(float &w, float &x, float &y, float &z);
 	int getAcceleration(float &x, float &y, float &z); 
 	int getWorldAcceleration(float &x, float &y, float &z); 
