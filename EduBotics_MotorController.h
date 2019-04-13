@@ -12,6 +12,7 @@ private:
 	int motor_one_pwm_pin_; 
 	int motor_two_dir_pin_;
 	int motor_two_pwm_pin_;
+	int min_speed_ = 0; 
 };
 
 #endif

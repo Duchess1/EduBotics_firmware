@@ -17,6 +17,11 @@ int EduboticsMotorController::setSpeed(int motor_speed) {
 	
 	static int previous_speed = 0; 
 
+
+	if (motor_speed > -min_speed_ && motor_speed < min_speed_) {
+		motor_speed = 0; 
+	}
+
 	if (motor_speed > 0) {
 		
 		digitalWrite(motor_one_dir_pin_, HIGH); 
