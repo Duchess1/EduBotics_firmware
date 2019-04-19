@@ -104,24 +104,29 @@ void uploadBatteryVoltage(void) {
 // - Update PID parameters on the fly 
 //===========================================================
 int updateTunings() {
-  motorController.setSpeed(0);
-	Serial.println("SET PID VALUES");
-  while(!Serial.available());
-	String response = Serial.readString(); 
+  motorController.setSpeed(0);                        // Turn off motors 
+	Serial.println("SET PID VALUES");                   // Notify user/MATLAB we're in updateTunings mode
+  while(!Serial.available());                         // Wait for a response
+	String response = Serial.readString();              // Read the response. Format "<P parameter>,<I parameter>,<D parameter>". e.g "12,10,0.0193"
 
+  // Find the delimiters in the command
 	uint8_t first_comma = response.indexOf(',');
   uint8_t second_comma = response.indexOf(',', first_comma+1);  
 
+  // Split it up
   String kp_str = response.substring(0, first_comma); 
   String ki_str = response.substring(first_comma+1, second_comma); 
   String kd_str = response.substring(second_comma+1, response.length()); 
 
+  // Convert to numbers 
   Kp = kp_str.toDouble();
   Ki = ki_str.toDouble();
   Kd = kd_str.toDouble();
 
+  // Set tunings
 	balancePid.SetTunings(Kp,Ki,Kd);
 
+  // Send the parameters back to the user as confirmation
 	String res = String(Kp) + "," + String(Ki) + "," + String(Kd);
 	Serial.println(res);
 }
