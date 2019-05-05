@@ -9,7 +9,7 @@ EduBoticsMPU6050::EduBoticsMPU6050() {
 }
 
 int EduBoticsMPU6050::initialise(void) {
-	 // join I2C bus (I2Cdev library doesn't do this automatically)
+   // join I2C bus (I2Cdev library doesn't do this automatically)
     #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
         Wire.begin();
         TWBR = 24; // 400kHz I2C clock (200kHz if CPU is 8MHz)
@@ -22,7 +22,7 @@ int EduBoticsMPU6050::initialise(void) {
 
     // verify connection
     if (!mpu_.testConnection()) {
-    	return false; 
+      //return -3; 
     }
 
     // load and configure the DMP
@@ -59,96 +59,96 @@ int EduBoticsMPU6050::initialise(void) {
 }
 
 int EduBoticsMPU6050::update(void) {
-	// wait for MPU interrupt or extra packet(s) available
+  // wait for MPU interrupt or extra packet(s) available
     if (mpuInterrupt_ || fifoCount_ > packetSize_) {
-    	// reset interrupt flag and get INT_STATUS byte
-	    mpuInterrupt_ = false;
-	    mpuIntStatus_ = mpu_.getIntStatus();
+      // reset interrupt flag and get INT_STATUS byte
+      mpuInterrupt_ = false;
+      mpuIntStatus_ = mpu_.getIntStatus();
 
-	    // get current FIFO count
-	    fifoCount_ = mpu_.getFIFOCount();
+      // get current FIFO count
+      fifoCount_ = mpu_.getFIFOCount();
 
-	    // check for overflow (this should never happen unless our code is too inefficient)
-	    if ((mpuIntStatus_ & 0x10) || fifoCount_ == 1024) {
-	        // reset so we can continue cleanly
-	        mpu_.resetFIFO();
-	        return false; 
-	    // otherwise, check for DMP data ready interrupt (this should happen frequently)
-	    } 
-	    else if (mpuIntStatus_ & 0x02) {
-	        // wait for correct available data length, should be a VERY short wait
-	        while (fifoCount_ < packetSize_) {
-	            fifoCount_ = mpu_.getFIFOCount();
-	        }
+      // check for overflow (this should never happen unless our code is too inefficient)
+      if ((mpuIntStatus_ & 0x10) || fifoCount_ == 1024) {
+          // reset so we can continue cleanly
+          mpu_.resetFIFO();
+          return false; 
+      // otherwise, check for DMP data ready interrupt (this should happen frequently)
+      } 
+      else if (mpuIntStatus_ & 0x02) {
+          // wait for correct available data length, should be a VERY short wait
+          while (fifoCount_ < packetSize_) {
+              fifoCount_ = mpu_.getFIFOCount();
+          }
 
-	        // read a packet from FIFO
-	        mpu_.getFIFOBytes(fifoBuffer_, packetSize_);
-	        
-	        // track FIFO count here in case there is > 1 packet available
-	        // (this lets us immediately read more without waiting for an interrupt)
-	        fifoCount_ -= packetSize_;
-    	}
-	}	    
+          // read a packet from FIFO
+          mpu_.getFIFOBytes(fifoBuffer_, packetSize_);
+          
+          // track FIFO count here in case there is > 1 packet available
+          // (this lets us immediately read more without waiting for an interrupt)
+          fifoCount_ -= packetSize_;
+      }
+  }     
 
-	return true; 
+  return true; 
 }
 
 int EduBoticsMPU6050::getYawPitchRoll(double *yaw, double *pitch, double *roll) {
 
-	if (update()) {
-	    mpu_.dmpGetQuaternion(&q_, fifoBuffer_);
-	    mpu_.dmpGetGravity(&gravity_, &q_);
-	    mpu_.dmpGetYawPitchRoll(ypr_, &q_, &gravity_);
-	    *yaw = double(ypr_[0]*180/M_PI); 
-	    *pitch = double(ypr_[1]*180/M_PI); 
-	    *roll = double(ypr_[2]*180/M_PI); 
-	    return true;
-	}
-	else {
-		return false; 
-	}
+  if (update()) {
+      mpu_.dmpGetQuaternion(&q_, fifoBuffer_);
+      mpu_.dmpGetGravity(&gravity_, &q_);
+      mpu_.dmpGetYawPitchRoll(ypr_, &q_, &gravity_);
+      *yaw = double(ypr_[0]*180/M_PI); 
+      *pitch = double(ypr_[1]*180/M_PI); 
+      *roll = double(ypr_[2]*180/M_PI); 
+      return true;
+  }
+  else {
+    return false; 
+  }
 }
 
 int EduBoticsMPU6050::getQuaternion(float &w, float &x, float &y, float &z) {
-	mpu_.dmpGetQuaternion(&q_, fifoBuffer_);
-	w = q_.w;
-	x = q_.x; 
-	y = q_.y; 
-	z = q_.z; 
+  mpu_.dmpGetQuaternion(&q_, fifoBuffer_);
+  w = q_.w;
+  x = q_.x; 
+  y = q_.y; 
+  z = q_.z; 
 }
 
 int EduBoticsMPU6050::getAcceleration(float &x, float &y, float &z) {
-	//display real acceleration, adjusted to remove gravity
-	mpu_.dmpGetQuaternion(&q_, fifoBuffer_);
-	mpu_.dmpGetAccel(&aa_, fifoBuffer_);
-	mpu_.dmpGetGravity(&gravity_, &q_);
-	mpu_.dmpGetLinearAccel(&aaReal_, &aa_, &gravity_);
+  //display real acceleration, adjusted to remove gravity
+  mpu_.dmpGetQuaternion(&q_, fifoBuffer_);
+  mpu_.dmpGetAccel(&aa_, fifoBuffer_);
+  mpu_.dmpGetGravity(&gravity_, &q_);
+  mpu_.dmpGetLinearAccel(&aaReal_, &aa_, &gravity_);
 
-	x = aaReal_.x; 
-	y = aaReal_.y; 
-	z = aaReal_.z; 
+  x = aaReal_.x; 
+  y = aaReal_.y; 
+  z = aaReal_.z; 
 }
 
 int EduBoticsMPU6050::getWorldAcceleration(float &x, float &y, float &z) {
-	 // display initial world-frame acceleration, adjusted to remove gravity
-	// and rotated based on known orientation from quaternion
-	mpu_.dmpGetQuaternion(&q_, fifoBuffer_);
-	mpu_.dmpGetAccel(&aa_, fifoBuffer_);
-	mpu_.dmpGetGravity(&gravity_, &q_);
-	mpu_.dmpGetLinearAccel(&aaReal_, &aa_, &gravity_);
-	mpu_.dmpGetLinearAccelInWorld(&aaWorld_, &aaReal_, &q_);
-	
-	x = aaWorld_.x; 
-	y = aaWorld_.y; 
-	z = aaWorld_.z; 
+   // display initial world-frame acceleration, adjusted to remove gravity
+  // and rotated based on known orientation from quaternion
+  mpu_.dmpGetQuaternion(&q_, fifoBuffer_);
+  mpu_.dmpGetAccel(&aa_, fifoBuffer_);
+  mpu_.dmpGetGravity(&gravity_, &q_);
+  mpu_.dmpGetLinearAccel(&aaReal_, &aa_, &gravity_);
+  mpu_.dmpGetLinearAccelInWorld(&aaWorld_, &aaReal_, &q_);
+  
+  x = aaWorld_.x; 
+  y = aaWorld_.y; 
+  z = aaWorld_.z; 
 }
 
 int EduBoticsMPU6050::getEuler(float &x, float &y, float &z) {
-	// display Euler angles in degrees
-	mpu_.dmpGetQuaternion(&q_, fifoBuffer_);
-	mpu_.dmpGetEuler(euler_, &q_);
-	
-	x = euler_[0] * 180/M_PI;
-	y = euler_[1] * 180/M_PI;
-	z = euler_[2] * 180/M_PI;
+  // display Euler angles in degrees
+  mpu_.dmpGetQuaternion(&q_, fifoBuffer_);
+  mpu_.dmpGetEuler(euler_, &q_);
+  
+  x = euler_[0] * 180/M_PI;
+  y = euler_[1] * 180/M_PI;
+  z = euler_[2] * 180/M_PI;
 }

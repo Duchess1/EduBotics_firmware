@@ -3,7 +3,14 @@
 #include "EduBotics_MotorController.h"
 #include <PID_v1.h>
 
+#define ID "Egglet V1.3"
+
+// Bluetooth comms definition 
 #define BUFFER_SIZE 200
+// ADC definitions 
+#define VOLTAGE_DIVIDER_PIN A0
+#define R1 10.0
+#define R2 11.0
 
 // Movement
 bool active = true; 
@@ -14,6 +21,7 @@ uint16_t data_log_timestamps[BUFFER_SIZE] = {0};
 bool data_log_on = false;
 uint16_t data_log_period = 50;     // How regularly measurements are made, ms
 unsigned int data_log_counter = 0; 
+unsigned long previous_time = millis();
 
 // PID
 static double setpoint = 0;
@@ -21,9 +29,9 @@ static double Input = 0;
 static double Output= 0;
 static double yaw, pitch, roll; 
 // No vacuum form gains
-double Kp = 12;
+double Kp = 8;
 double Kd = .0192;
-double Ki = 13;
+double Ki = 8;
 
 // double Kp = 17;
 // double Kd = 0;
@@ -64,9 +72,10 @@ int setZero(void) {
 	Serial.println("SET ZERO");
 	String response = Serial.readString(); 
 
-	setpoint = response.toDouble(); 
+	setpoint = double(response.toFloat());
 
 	String res = String(setpoint);
+  delay(200);
 	Serial.println(res);
 
 	return 0; 
@@ -93,10 +102,12 @@ void uploadData(void) {
 // - Read battery voltage and send to MATLAB
 //===========================================================
 void uploadBatteryVoltage(void) {
-  int voltage_reading = analogRead(A0);
-  double voltage_vale = voltage_reading*(5/1023);
+  double voltage_reading = analogRead(A0);
+  double voltage_value = voltage_reading*(5.0/1023);
 
-  Serial.println(String(voltage_reading));
+  voltage_value = voltage_value * (R1 + R2) / R2;
+
+  Serial.println(String(voltage_value));
 }
 
 //===========================================================
@@ -119,14 +130,15 @@ int updateTunings() {
   String kd_str = response.substring(second_comma+1, response.length()); 
 
   // Convert to numbers 
-  Kp = kp_str.toDouble();
-  Ki = ki_str.toDouble();
-  Kd = kd_str.toDouble();
+  Kp = kp_str.toFloat();
+  Ki = ki_str.toFloat();
+  Kd = kd_str.toFloat();
 
   // Set tunings
 	balancePid.SetTunings(Kp,Ki,Kd);
 
   // Send the parameters back to the user as confirmation
+  delay(200);  
 	String res = String(Kp) + "," + String(Ki) + "," + String(Kd);
 	Serial.println(res);
 }
@@ -164,60 +176,11 @@ void setupWiFi(void) {
 }
 
 //===========================================================
-//						setup
-// - Sets up serial, MPU, bluetooth and PID. 
+//            dataLog
+// - Log data
 //===========================================================
-void setup() {
-	// put your setup code here, to run once:
-  	Serial.begin(115200); 
-    Serial.println("Initialising MPU"); 
-  	while (!mpu.initialise()) {
-  	    Serial.println("Failed to initialise MPU");
-  	}
-    	Serial.println("Successfully initialised MPU"); 
-  
-   	//setup PID    
-   	setpoint = 2.9; 
-  	balancePid.SetMode(AUTOMATIC);
-  	balancePid.SetSampleTime(10);
-  	balancePid.SetOutputLimits(-255, 255);  
-  
-  	for (int i = 0; i < 1000; i++) {
-  		mpu.getYawPitchRoll(&yaw, &pitch, &roll);
-  		delay(1);
-  	}	
-
-    setupWiFi(); 
-}
-
-//===========================================================
-//						loop
-// - Main loop of code 
-//===========================================================
-unsigned long previous_time = millis();
-
-void loop() {
-	long tmp = 0;
-
-	// Get roll pitch yaw readings
-	if (mpu.getYawPitchRoll(&yaw, &pitch, &roll) == true) { 
-		tmp = roll*10;
-		Input = double(tmp)/10;		
-	}
-
-  // Run PID code
-	if (balancePid.Compute() == true && !(roll > 60 || roll < -60) && active == true) {
-		motorController.setSpeed(Output); 
-	}
-
-  // If robot has fallen over, stop
-	if  (roll > 55 || roll < -55 || pitch > 55 || pitch < -55) {
-		motorController.setSpeed(0); 
-	}
-
-  // Data log
-  if (data_log_on == true) {
-    uint16_t timestamp = millis() - previous_time;
+void dataLog(void) {
+  uint16_t timestamp = millis() - previous_time;
 
     if (timestamp > data_log_period) {
       previous_time = millis(); 
@@ -228,7 +191,7 @@ void loop() {
       }
       else {
         data_log_timestamps[data_log_counter] = data_log_timestamps[data_log_counter-1] + timestamp; // Calculate total run time and save
-        float tmp = roll*10;
+        float tmp = pitch*10;
         data_log_data[data_log_counter] = (uint8_t)tmp;
       }
       data_log_counter += 1; 
@@ -241,6 +204,66 @@ void loop() {
         data_log_counter = 0;
       }
     }
+}
+
+//===========================================================
+//						setup
+// - Sets up serial, MPU, bluetooth and PID. 
+//===========================================================
+void setup() {
+    // Setup MPU
+  	Serial.begin(115200); 
+    Serial.println("Initialising MPU"); 
+  	while (!mpu.initialise()) {
+
+  	    Serial.println("Failed to initialise MPU");
+  	}
+  	Serial.println("Successfully initialised MPU"); 
+  
+   	// setup PID    
+   	setpoint = 0; 
+  	balancePid.SetMode(AUTOMATIC);
+  	balancePid.SetSampleTime(10);
+  	balancePid.SetOutputLimits(-255, 255);  
+
+    // Get a few readings to allow MPU to settle
+  	for (int i = 0; i < 100; i++) {
+  		mpu.getYawPitchRoll(&yaw, &pitch, &roll);
+  		delay(10);
+  	}	
+
+    // Setup wifi 
+    setupWiFi(); 
+
+    // Setup ADC
+    pinMode(VOLTAGE_DIVIDER_PIN, INPUT); 
+}
+
+//===========================================================
+//						loop
+// - Main loop of code 
+//===========================================================
+void loop() {
+	long tmp = 0;
+  
+	// Get roll pitch yaw readings
+	if (mpu.getYawPitchRoll(&yaw, &pitch, &roll) == true) { 
+		Input = pitch;		
+	}
+
+  // Run PID code
+	if (balancePid.Compute() == true && !(pitch > 60 || pitch < -60) && active == true) {
+		motorController.setSpeed(Output); 
+	}
+
+  // If robot has fallen over, stop
+	if  (pitch > 55 || pitch < -55) {
+		motorController.setSpeed(0); 
+	}
+
+  // Data log
+  if (data_log_on == true) {
+    dataLog(); 
   }
 
   // Deal with comms
@@ -287,9 +310,20 @@ void loop() {
         active = true; 
         break;
       }
+      // Start datalog
       case 7: {
         active = true; 
         data_log_on = true; 
+        break;
+      }
+      // Get voltage
+      case 8: {
+        uploadBatteryVoltage(); 
+        break;
+      }
+      // Get ID
+      case 9 : {
+        Serial.println(ID); 
         break;
       }
       default: {
