@@ -2,8 +2,9 @@
 #include "EduBotics_MPU6050.h"
 #include "EduBotics_MotorController.h"
 #include <PID_v1.h>
+#include <EEPROM.h>
 
-#define ID "Egglet V1.3"
+#define ID "Egglet V1.4"
 
 // Bluetooth comms definition 
 #define BUFFER_SIZE 200
@@ -24,14 +25,14 @@ unsigned int data_log_counter = 0;
 unsigned long previous_time = millis();
 
 // PID
-static double setpoint = 0;
+static double zero_offset = 0;
 static double Input = 0;
 static double Output= 0;
 static double yaw, pitch, roll; 
 // No vacuum form gains
-double Kp = 8;
-double Kd = .0192;
-double Ki = 8;
+double Kp = 0;
+double Ki = 0;
+double Kd = 0;
 
 // double Kp = 17;
 // double Kd = 0;
@@ -42,7 +43,7 @@ double Ki = 8;
 //double Kd = 0.02125;
 //double Ki = 11.76;
 
-PID balancePid(&Input, &Output, &setpoint, Kp, Ki,Kd, DIRECT);
+PID balancePid(&Input, &Output, &zero_offset, Kp, Ki,Kd, DIRECT);
 
 // MPU 
 EduBoticsMPU6050 mpu; 
@@ -72,11 +73,14 @@ int setZero(void) {
 	Serial.println("SET ZERO");
 	String response = Serial.readString(); 
 
-	setpoint = double(response.toFloat());
+	zero_offset = double(response.toFloat());
 
-	String res = String(setpoint);
+	String res = String(zero_offset);
   delay(200);
 	Serial.println(res);
+
+  // Write zero to EEPROM
+  EEPROM.put(192, zero_offset);
 
 	return 0; 
 }
@@ -87,7 +91,7 @@ int setZero(void) {
 //===========================================================
 void uploadData(void) {
 
-  Serial.println(String("BEGIN DATA DUMP. Number of readings:") + String(BUFFER_SIZE));
+  Serial.println(String(BUFFER_SIZE));
   while(!Serial.available());
 
   for (unsigned int i = 0; i < BUFFER_SIZE; i++) {
@@ -134,15 +138,21 @@ int updateTunings() {
   Ki = ki_str.toFloat();
   Kd = kd_str.toFloat();
 
-  // Set tunings
-	balancePid.SetTunings(Kp,Ki,Kd);
-
   // Send the parameters back to the user as confirmation
   delay(200);  
 	String res = String(Kp) + "," + String(Ki) + "," + String(Kd);
 	Serial.println(res);
+
+  // Set tunings
+  balancePid.SetTunings(Kp,Ki,Kd);
+
+  // Write tunings to EEPROM
+  EEPROM.put(0, Kp);
+  EEPROM.put(64, Ki); 
+  EEPROM.put(128, Kd);
 }
-//===========================================================
+
+//=========================================================
 //            setupWifi
 // - Sets up WiFi
 //===========================================================
@@ -221,13 +231,20 @@ void setup() {
   	Serial.println("Successfully initialised MPU"); 
   
    	// setup PID    
-   	setpoint = 0; 
+   	zero_offset = 0; 
   	balancePid.SetMode(AUTOMATIC);
   	balancePid.SetSampleTime(10);
   	balancePid.SetOutputLimits(-255, 255);  
 
+    // Read saved values from EEPROM
+    EEPROM.get(0, Kp);  
+    EEPROM.get(64, Ki);  
+    EEPROM.get(128, Kd);  
+    EEPROM.get(192, zero_offset);  
+    balancePid.SetTunings(Kp,Ki,Kd);
+
     // Get a few readings to allow MPU to settle
-  	for (int i = 0; i < 100; i++) {
+  	for (int i = 0; i < 1000; i++) {
   		mpu.getYawPitchRoll(&yaw, &pitch, &roll);
   		delay(10);
   	}	
@@ -314,6 +331,7 @@ void loop() {
       case 7: {
         active = true; 
         data_log_on = true; 
+        previous_time = millis(); 
         break;
       }
       // Get voltage
@@ -322,9 +340,16 @@ void loop() {
         break;
       }
       // Get ID
-      case 9 : {
-        Serial.println(ID); 
+      case 9: {
+        String res = String(ID) + "," + String(Kp) + "," + String(Ki) + "," + String(Kd) + "," + String(zero_offset);
+
+        Serial.println(res); 
         break;
+      }
+      // Send datalog data
+      case 11: {
+          uploadData(); 
+          break;
       }
       default: {
         break;
