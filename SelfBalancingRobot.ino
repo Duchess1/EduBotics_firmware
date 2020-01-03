@@ -4,7 +4,8 @@
 #include <PID_v1.h>
 #include <EEPROM.h>
 
-#define ID "Egglet V1.4"
+#define ID "Egglet Mk4"
+#define WIFI_SSID "Egglet Mk4 007"
 
 // Bluetooth comms definition 
 #define BUFFER_SIZE 200
@@ -69,6 +70,7 @@ void sendRollPitch(void) {
 //===========================================================
 int setZero(void) {
   motorController.setSpeed(0);
+  balancePid.SetMode(MANUAL);
 
 	Serial.println("SET ZERO");
 	String response = Serial.readString(); 
@@ -82,6 +84,7 @@ int setZero(void) {
   // Write zero to EEPROM
   EEPROM.put(192, zero_offset);
 
+  balancePid.SetMode(AUTOMATIC);
 	return 0; 
 }
 
@@ -120,6 +123,7 @@ void uploadBatteryVoltage(void) {
 //===========================================================
 int updateTunings() {
   motorController.setSpeed(0);                        // Turn off motors 
+  balancePid.SetMode(MANUAL);
 	Serial.println("SET PID VALUES");                   // Notify user/MATLAB we're in updateTunings mode
   while(!Serial.available());                         // Wait for a response
 	String response = Serial.readString();              // Read the response. Format "<P parameter>,<I parameter>,<D parameter>". e.g "12,10,0.0193"
@@ -150,6 +154,7 @@ int updateTunings() {
   EEPROM.put(0, Kp);
   EEPROM.put(64, Ki); 
   EEPROM.put(128, Kd);
+  balancePid.SetMode(AUTOMATIC);
 }
 
 //=========================================================
@@ -157,31 +162,33 @@ int updateTunings() {
 // - Sets up WiFi
 //===========================================================
 void setupWiFi(void) {
-  Serial.println("AT"); 
+Serial.println("AT"); 
   if (!Serial.find("OK")) {
     
   }
-
+  Serial.find("OK");
   Serial.println("AT+CWMODE=3"); 
   if (!Serial.find("OK")) {
     
   }
-
   Serial.println("AT+CWSAP=\"ESP\",\"password\",1,4"); 
   if (!Serial.find("OK")) {
     
   }
-   
+  Serial.find("OK");
+  String cmd = String("AT+CWSAP=\"") + WIFI_SSID + String("\",\"password\",1,4");
+  Serial.println(cmd); 
+  Serial.find("OK");
   Serial.println("AT+CIPSTART=\"UDP\",\"192.168.4.2\",2233,2233,0"); 
   if (!Serial.find("OK")) {
     
   }
-
+  Serial.find("OK");
   Serial.println("AT+CIPMODE=1"); 
   if (!Serial.find("OK")) {
     
   }
-
+  Serial.find("OK");
   Serial.println("AT+CIPSEND"); 
 }
 
@@ -223,17 +230,14 @@ void dataLog(void) {
 void setup() {
     // Setup MPU
   	Serial.begin(115200); 
-    Serial.println("Initialising MPU"); 
   	while (!mpu.initialise()) {
 
   	    Serial.println("Failed to initialise MPU");
   	}
-  	Serial.println("Successfully initialised MPU"); 
   
    	// setup PID    
    	zero_offset = 0; 
-  	balancePid.SetMode(AUTOMATIC);
-  	balancePid.SetSampleTime(10);
+  	balancePid.SetSampleTime(50);
   	balancePid.SetOutputLimits(-255, 255);  
 
     // Read saved values from EEPROM
@@ -241,10 +245,26 @@ void setup() {
     EEPROM.get(64, Ki);  
     EEPROM.get(128, Kd);  
     EEPROM.get(192, zero_offset);  
-    balancePid.SetTunings(Kp,Ki,Kd);
+
+    if (isnan(Kp)) {
+      Kp = 0;
+      EEPROM.put(0, Kp);
+    }
+    if (isnan(Ki)) {
+      Ki = 0;
+      EEPROM.put(64, Ki); 
+    }
+    if (isnan(Kd)) {
+      Kd = 0;
+      EEPROM.put(128, Kd);
+    }
+    if (isnan(zero_offset)) {
+      zero_offset = 0;
+      EEPROM.put(192, zero_offset);
+    }
 
     // Get a few readings to allow MPU to settle
-  	for (int i = 0; i < 1000; i++) {
+  	for (int i = 0; i < 500; i++) {
   		mpu.getYawPitchRoll(&yaw, &pitch, &roll);
   		delay(10);
   	}	
@@ -254,6 +274,15 @@ void setup() {
 
     // Setup ADC
     pinMode(VOLTAGE_DIVIDER_PIN, INPUT); 
+
+    Kp = float(Kp); 
+    Ki = float(Ki); 
+    Kd = float(Kd); 
+    zero_offset = float(zero_offset); 
+
+    motorController.setSpeed(0); 
+    balancePid.SetTunings(Kp,Ki,Kd);
+    balancePid.SetMode(AUTOMATIC);
 }
 
 //===========================================================
@@ -269,13 +298,10 @@ void loop() {
 	}
 
   // Run PID code
-	if (balancePid.Compute() == true && !(pitch > 60 || pitch < -60) && active == true) {
-		motorController.setSpeed(Output); 
-	}
-
-  // If robot has fallen over, stop
-	if  (pitch > 55 || pitch < -55) {
-		motorController.setSpeed(0); 
+	if (active == true) {
+    if (balancePid.Compute() == true) {
+  		motorController.setSpeed(Output);
+    } 
 	}
 
   // Data log
@@ -342,7 +368,6 @@ void loop() {
       // Get ID
       case 9: {
         String res = String(ID) + "," + String(Kp) + "," + String(Ki) + "," + String(Kd) + "," + String(zero_offset);
-
         Serial.println(res); 
         break;
       }
