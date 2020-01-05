@@ -5,12 +5,12 @@
 #include <EEPROM.h>
 
 #define ID "Egglet Mk4"
-#define WIFI_SSID "Egglet Mk4 007"
+#define WIFI_SSID "Egglet Mk5 001"
 
 // Bluetooth comms definition 
 #define BUFFER_SIZE 200
 // ADC definitions 
-#define VOLTAGE_DIVIDER_PIN A0
+#define VOLTAGE_DIVIDER_PIN 14
 #define R1 10.0
 #define R2 11.0
 
@@ -50,7 +50,7 @@ PID balancePid(&Input, &Output, &zero_offset, Kp, Ki,Kd, DIRECT);
 EduBoticsMPU6050 mpu; 
 
 // Motor Controller
-EduboticsMotorController motorController(14, 16, 20, 21, 15, 17, 22, 23);
+EduboticsMotorController motorController(12, 16, 22, 23, 15, 17, 20, 21);
 
 //===========================================================
 //						sendRollPitch
@@ -109,8 +109,8 @@ void uploadData(void) {
 // - Read battery voltage and send to MATLAB
 //===========================================================
 void uploadBatteryVoltage(void) {
-  double voltage_reading = analogRead(A0);
-  double voltage_value = voltage_reading*(5.0/1023);
+  double voltage_reading = analogRead(VOLTAGE_DIVIDER_PIN);
+  double voltage_value = voltage_reading*(3.3/1023);
 
   voltage_value = voltage_value * (R1 + R2) / R2;
 
@@ -322,7 +322,9 @@ void loop() {
     Serial.print(",");
     Serial.print(current_rpm_two);
     Serial.print(",");
-    Serial.println(Output);
+    Serial.print(Output);
+    Serial.print(",");
+    Serial.println(analogRead(VOLTAGE_DIVIDER_PIN));
 
   }
 
