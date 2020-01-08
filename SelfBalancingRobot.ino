@@ -6,6 +6,7 @@
 
 #define ID "Egglet Mk4"
 #define WIFI_SSID "Egglet Mk5 001"
+#define MOTOR_RPM 100
 
 // Bluetooth comms definition 
 #define BUFFER_SIZE 200
@@ -163,32 +164,32 @@ int updateTunings() {
 //===========================================================
 void setupWiFi(void) {
   Serial2.println("AT"); 
-  if (!Serial2.find("OK")) {
-    
-  }
   Serial2.find("OK");
+
   Serial2.println("AT+CWMODE=3"); 
   if (!Serial2.find("OK")) {
     
   }
+
   Serial2.println("AT+CWSAP=\"ESP\",\"password\",1,4"); 
   if (!Serial2.find("OK")) {
     
   }
-  Serial2.find("OK");
+  
   String cmd = String("AT+CWSAP=\"") + WIFI_SSID + String("\",\"password\",1,4");
   Serial2.println(cmd); 
   Serial2.find("OK");
+  
   Serial2.println("AT+CIPSTART=\"UDP\",\"192.168.4.2\",2233,2233,0"); 
   if (!Serial2.find("OK")) {
     
   }
-  Serial2.find("OK");
+  
   Serial2.println("AT+CIPMODE=1"); 
   if (!Serial2.find("OK")) {
     
   }
-  Serial2.find("OK");
+  
   Serial2.println("AT+CIPSEND"); 
 }
 
@@ -235,7 +236,7 @@ void setup() {
    	// setup PID    
    	zero_offset = 0; 
   	balancePid.SetSampleTime(50);
-  	balancePid.SetOutputLimits(-255, 255);  
+  	balancePid.SetOutputLimits(-MOTOR_RPM, MOTOR_RPM);  
 
     Serial.println("Read EEPROM");
     // Read saved values from EEPROM
@@ -263,7 +264,7 @@ void setup() {
 
     Serial.println("Initialising MPU");
     // Get a few readings to allow MPU to settle
-  	for (int i = 0; i < 500; i++) {
+  	for (int i = 0; i < 100; i++) {
   		mpu.getYawPitchRoll(&yaw, &pitch, &roll);
   		delay(10);
   	}	
@@ -306,26 +307,33 @@ void loop() {
 
   // Run PID code
 	if (active == true) {
-    if (balancePid.Compute() == true) {
-      previous_time = millis();      
-    } 
+    balancePid.Compute(); 
 	}
 
   if (millis() - previous_time > 5) {
+
+    if (active == true) {
+      motorController.setDesiredRPM(Output);
+    }
+
     motorController.update();
     previous_time = millis(); 
-    motorController.setDesiredRPM(Output);  
     double current_rpm_one = motorController.getWheelOneCurrentRPM(); 
     double current_rpm_two = motorController.getWheelTwoCurrentRPM(); 
 
-    Serial.print(current_rpm_one); 
-    Serial.print(",");
-    Serial.print(current_rpm_two);
-    Serial.print(",");
-    Serial.print(Output);
-    Serial.print(",");
-    Serial.println(analogRead(VOLTAGE_DIVIDER_PIN));
+    unsigned long time_to_send = millis(); 
 
+    Serial.print("RPM: ");
+    Serial.print(current_rpm_one); 
+    Serial.print(", ");
+    Serial.print("RPM: ");
+    Serial.print(current_rpm_two);
+    Serial.print(", ");
+    Serial.print("PID_Output: ");
+    Serial.print(Output);
+    Serial.print(", ");
+    Serial.print("Pitch: ");
+    Serial.println(pitch);
   }
 
   // Data log
@@ -399,6 +407,12 @@ void loop() {
       case 11: {
           uploadData(); 
           break;
+      }
+      // Get pitch and roll data
+      case 12: {
+        String res = String(pitch) + "," + String(roll); 
+        Serial2.println(res);
+        break;
       }
       default: {
         break;
