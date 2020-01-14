@@ -31,6 +31,8 @@ static double zero_offset = 0;
 static double Input = 0;
 static double Output= 0;
 static double yaw, pitch, roll; 
+unsigned long delayed_start = 0; 
+
 // No vacuum form gains
 double Kp = 0;
 double Ki = 0;
@@ -123,10 +125,12 @@ void uploadBatteryVoltage(void) {
 // - Update PID parameters on the fly 
 //===========================================================
 int updateTunings() {
-  motorController.stop();                        // Turn off motors 
+  motorController.stop();                               // Turn off motors 
   balancePid.SetMode(MANUAL);
 	Serial2.println("SET PID VALUES");                   // Notify user/MATLAB we're in updateTunings mode
-  while(!Serial2.available());                         // Wait for a response
+  while(!Serial2.available()) {
+    mpu.update();
+  }                         // Wait for a response
 	String response = Serial2.readString();              // Read the response. Format "<P parameter>,<I parameter>,<D parameter>". e.g "12,10,0.0193"
 
   // Find the delimiters in the command
@@ -144,7 +148,6 @@ int updateTunings() {
   Kd = kd_str.toFloat();
 
   // Send the parameters back to the user as confirmation
-  delay(200);  
 	String res = String(Kp) + "," + String(Ki) + "," + String(Kd);
 	Serial2.println(res);
 
@@ -156,7 +159,8 @@ int updateTunings() {
   EEPROM.put(64, Ki); 
   EEPROM.put(128, Kd);
   balancePid.SetMode(AUTOMATIC);
-  motorController.start(); 
+  delayed_start = 200; 
+  //motorController.start(); 
 }
 
 //=========================================================
@@ -164,32 +168,24 @@ int updateTunings() {
 // - Sets up WiFi
 //===========================================================
 void setupWiFi(void) {
-  Serial2.println("AT"); 
-  Serial2.find("OK");
+  // Serial2.println("AT"); 
+  // Serial2.find("OK");
 
   Serial2.println("AT+CWMODE=3"); 
-  if (!Serial2.find("OK")) {
-    
-  }
-
+  Serial2.find("OK");
+  
   Serial2.println("AT+CWSAP=\"ESP\",\"password\",1,4"); 
-  if (!Serial2.find("OK")) {
-    
-  }
+  Serial2.find("OK");
   
   String cmd = String("AT+CWSAP=\"") + WIFI_SSID + String("\",\"password\",1,4");
   Serial2.println(cmd); 
   Serial2.find("OK");
   
   Serial2.println("AT+CIPSTART=\"UDP\",\"192.168.4.2\",2233,2233,0"); 
-  if (!Serial2.find("OK")) {
-    
-  }
-  
+  Serial2.find("OK");
+
   Serial2.println("AT+CIPMODE=1"); 
-  if (!Serial2.find("OK")) {
-    
-  }
+  Serial2.find("OK");
   
   Serial2.println("AT+CIPSEND"); 
 }
@@ -263,13 +259,6 @@ void setup() {
       EEPROM.put(192, zero_offset);
     }
 
-    Serial.println("Initialising MPU");
-    // Get a few readings to allow MPU to settle
-  	for (int i = 0; i < 100; i++) {
-  		mpu.getYawPitchRoll(&yaw, &pitch, &roll);
-  		delay(10);
-  	}	
-
     Serial.println("Setting up WiFi");
     // Setup wifi 
     setupWiFi(); 
@@ -288,8 +277,8 @@ void setup() {
     balancePid.SetMode(AUTOMATIC);
     motorController.setMotorGains(2.5, 50, 0); 
 
-    Serial.println("Running...");
-    motorController.start(); 
+    Serial.println("Starting in 1 second...");
+    delayed_start = 200;
 }
 
 //===========================================================
@@ -309,17 +298,22 @@ void loop() {
 	Input = pitch;	
 
   // Run PID code
-	if (active == true) {
+	if (active == true && delayed_start == 0) {
+    motorController.start(); 
     balancePid.Compute(); 
 	}
+  
+  if (active == true) {
+    motorController.update();
+    motorController.setDesiredRPM(Output);
+  }
 
   if (millis() - previous_time > 5) {
 
-    if (active == true) {
-      motorController.setDesiredRPM(Output);
+    if (delayed_start > 0) {
+      delayed_start -= 1; 
     }
 
-    motorController.update();
     previous_time = millis(); 
     double current_rpm_one = motorController.getWheelOneCurrentRPM(); 
     double current_rpm_two = motorController.getWheelTwoCurrentRPM(); 
