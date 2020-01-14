@@ -14,6 +14,17 @@ EduboticsMotorController::EduboticsMotorController(int motor_one_dir_pin, int mo
 
 	encoderWheelOne = new EduBoticsEncoder(motor_one_output_a_pin, motor_one_output_b_pin);
 	encoderWheelTwo = new EduBoticsEncoder(motor_two_output_a_pin, motor_two_output_b_pin);
+
+	motor_one_pid = new PID(&motor_one_current_rpm, &motor_one_current_pwm, &desired_rpm_, Kp_, Ki_, Kd_, DIRECT);
+	motor_two_pid = new PID(&motor_two_current_rpm, &motor_two_current_pwm, &desired_rpm_, Kp_, Ki_, Kd_, DIRECT);
+	
+	motor_one_pid->SetSampleTime(5);
+	motor_one_pid->SetOutputLimits(-255, 255);
+	motor_one_pid->SetMode(AUTOMATIC);
+
+	motor_two_pid->SetSampleTime(5);
+	motor_two_pid->SetOutputLimits(-255, 255);
+	motor_two_pid->SetMode(AUTOMATIC);
 }
 
 void EduboticsMotorController::update(void) {
@@ -21,9 +32,23 @@ void EduboticsMotorController::update(void) {
 	encoderWheelTwo->update(); 
 }
 
+void EduboticsMotorController::setMotorGains(double Kp, double Ki, double Kd) {
+	Kp_ = Kp; 
+	Ki_	= Ki; 
+	Kd_ = Kd;
+
+	motor_one_pid->SetTunings(Kp_, Ki_, Kd_); 
+	motor_two_pid->SetTunings(Kp_, Ki_, Kd_); 
+}
+
 void EduboticsMotorController::stop(void) {
-	setWheelOnePWMDuty(0); 
-	setWheelTwoPWMDuty(0); 
+	pid_enabled = false; 
+	setWheelOnePWMDuty(0);
+  setWheelTwoPWMDuty(0);
+}
+
+void EduboticsMotorController::start(void) {
+	pid_enabled = true; 
 }
 
 double EduboticsMotorController::getWheelOneCurrentRPM(void) {
@@ -36,34 +61,22 @@ double EduboticsMotorController::getWheelTwoCurrentRPM(void) {
 
 int EduboticsMotorController::setDesiredRPM(double desired_rpm) {
 	
-  double motor_one_rpm = encoderWheelOne->getRPM();
-  double motor_two_rpm = encoderWheelTwo->getRPM(); 
+  motor_one_current_rpm = encoderWheelOne->getRPM();
+  motor_two_current_rpm = encoderWheelTwo->getRPM(); 
 
-  int motor_one_delta = desired_rpm - motor_one_rpm;
-  int motor_two_delta = desired_rpm - motor_one_rpm;  
+  desired_rpm_ = desired_rpm;
 
-	if (motor_one_rpm != desired_rpm) {
-		motor_one_current_pwm += motor_one_delta * 0.4;
-		if (motor_one_current_pwm > 255) {
-      motor_one_current_pwm = 255; 
-    }
-    else if (motor_one_current_pwm < -255) {
-      motor_one_current_pwm = -255; 
-    }
-
-		setWheelOnePWMDuty(motor_one_current_pwm);
-	}
-
-	if (motor_two_rpm != desired_rpm) {
-		motor_two_current_pwm += motor_two_delta * 0.4;
-    if (motor_two_current_pwm > 255) {
-      motor_two_current_pwm = 255; 
-    }
-    else if (motor_two_current_pwm < -255) {
-      motor_two_current_pwm = -255; 
-    }
-		setWheelTwoPWMDuty(motor_two_current_pwm);
-	}
+  if (pid_enabled == true) {
+		motor_one_pid->Compute(); 
+	  motor_two_pid->Compute(); 
+  }
+  else { 
+  	motor_one_current_pwm = 0; 
+  	motor_two_current_pwm = 0; 
+  }
+  
+  setWheelOnePWMDuty(motor_one_current_pwm);
+  setWheelTwoPWMDuty(motor_two_current_pwm);
 }
 
 int EduboticsMotorController::setWheelOnePWMDuty(int pwm_duty) {

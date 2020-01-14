@@ -156,6 +156,7 @@ int updateTunings() {
   EEPROM.put(64, Ki); 
   EEPROM.put(128, Kd);
   balancePid.SetMode(AUTOMATIC);
+  motorController.start(); 
 }
 
 //=========================================================
@@ -285,8 +286,10 @@ void setup() {
     motorController.stop(); 
     balancePid.SetTunings(Kp,Ki,Kd);
     balancePid.SetMode(AUTOMATIC);
+    motorController.setMotorGains(2.5, 50, 0); 
 
     Serial.println("Running...");
+    motorController.start(); 
 }
 
 //===========================================================
@@ -323,16 +326,16 @@ void loop() {
 
     unsigned long time_to_send = millis(); 
 
-    Serial.print("RPM: ");
+    Serial.print("Wheel_one_RPM:");
     Serial.print(current_rpm_one); 
     Serial.print(", ");
-    Serial.print("RPM: ");
+    Serial.print("Wheel_two_RPM:");
     Serial.print(current_rpm_two);
     Serial.print(", ");
-    Serial.print("PID_Output: ");
+    Serial.print("PID_output:");
     Serial.print(Output);
     Serial.print(", ");
-    Serial.print("Pitch: ");
+    Serial.print("Pitch:");
     Serial.println(pitch);
   }
 
@@ -383,6 +386,7 @@ void loop() {
       // Start
       case 6: {
         active = true; 
+        motorController.start(); 
         break;
       }
       // Start datalog
