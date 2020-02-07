@@ -19,7 +19,7 @@ private:
   long current_position = 0;
   double current_rpm = 0; 
   long last_time = 0;
-  double counts_per_rev = 3576;
+  double counts_per_rev = 1200;
 };
 
 

@@ -6,7 +6,7 @@
 
 #define ID "Egglet Mk4"
 #define WIFI_SSID "Egglet Mk5 001"
-#define MOTOR_RPM 100
+#define MOTOR_RPM 320
 
 // Bluetooth comms definition 
 #define BUFFER_SIZE 200
@@ -275,7 +275,7 @@ void setup() {
     motorController.stop(); 
     balancePid.SetTunings(Kp,Ki,Kd);
     balancePid.SetMode(AUTOMATIC);
-    motorController.setMotorGains(2.5, 50, 0); 
+    motorController.setMotorGains(1, 10, 0); 
 
     Serial.println("Starting in 1 second...");
     delayed_start = 200;

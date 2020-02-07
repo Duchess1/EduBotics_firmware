@@ -18,7 +18,7 @@ EduboticsMotorController::EduboticsMotorController(int motor_one_dir_pin, int mo
 	motor_one_pid = new PID(&motor_one_current_rpm, &motor_one_current_pwm, &desired_rpm_, Kp_, Ki_, Kd_, DIRECT);
 	motor_two_pid = new PID(&motor_two_current_rpm, &motor_two_current_pwm, &desired_rpm_, Kp_, Ki_, Kd_, DIRECT);
 	
-	motor_one_pid->SetSampleTime(5);
+	motor_one_pid->SetSampleTime(10);
 	motor_one_pid->SetOutputLimits(-255, 255);
 	motor_one_pid->SetMode(AUTOMATIC);
 
@@ -75,6 +75,9 @@ int EduboticsMotorController::setDesiredRPM(double desired_rpm) {
   	motor_two_current_pwm = 0; 
   }
   
+  setWheelOnePWMDuty(motor_one_current_pwm);
+  setWheelTwoPWMDuty(motor_two_current_pwm);
+
   setWheelOnePWMDuty(motor_one_current_pwm);
   setWheelTwoPWMDuty(motor_two_current_pwm);
 }
